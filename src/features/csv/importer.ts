@@ -53,6 +53,43 @@ function extractMonthFromFileName(fileName: string): string | null {
 }
 
 /**
+ * type.csvを読み込んでkeywordとtypeのマッピングを取得
+ * @returns keyword -> type のマッピング
+ */
+async function loadTypeMapping(): Promise<Map<string, string>> {
+  try {
+    const response = await fetch('/type.csv');
+    if (!response.ok) {
+      console.warn('type.csvの読み込みに失敗しました。keywordマッチングはスキップされます。');
+      return new Map();
+    }
+    const text = await response.text();
+    const Papa = (await import('papaparse')).default;
+    const parseResult = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: 'greedy' as any,
+    }) as { data: Array<{ keyword: string; type: string }>; errors: any[] };
+    
+    if (parseResult.errors.length > 0) {
+      console.warn('type.csvパース警告:', parseResult.errors);
+    }
+    
+    const mapping = new Map<string, string>();
+    for (const row of parseResult.data) {
+      if (row.keyword && row.type) {
+        mapping.set(row.keyword, row.type);
+      }
+    }
+    
+    console.log(`type.csvを読み込みました: ${mapping.size}件のマッピング`);
+    return mapping;
+  } catch (error) {
+    console.warn('type.csvの読み込みでエラーが発生しました。keywordマッチングはスキップされます:', error);
+    return new Map();
+  }
+}
+
+/**
  * CSVファイルを読み込んでテキストに変換
  * @param file ファイルオブジェクト
  * @returns テキストとエンコーディング
@@ -98,6 +135,9 @@ async function readCsvFile(file: File): Promise<{ text: string; encoding: string
 export async function importCsvQuick(): Promise<void> {
   try {
     console.log('CSVインポート開始（カード）');
+    
+    // type.csvを読み込んでkeywordとtypeのマッピングを取得
+    const typeMapping = await loadTypeMapping();
     
     // ファイル入力要素を作成（複数選択可能）
     const fileInput = document.createElement('input');
@@ -234,12 +274,27 @@ export async function importCsvQuick(): Promise<void> {
         
         // 列数はA〜L（12列）に制限
         const MAX_COLS = 12;
+        const B_COL_INDEX = 1; // B列（利用店名・商品名）
+        const K_COL_INDEX = 10; // K列（typeを埋める列）
         const dataRowsNormalized: (string | number | boolean | null)[][] = [];
         for (const row of dataRows) {
           const excelRow: (string | number | boolean | null)[] = [];
           for (let i = 0; i < MAX_COLS; i++) {
             excelRow.push(i < row.length ? (row[i] || '') : '');
           }
+          
+          // B列（利用店名・商品名）にkeywordが含まれているかチェック
+          const bValue = String(excelRow[B_COL_INDEX] || '');
+          if (bValue && typeMapping.size > 0) {
+            // keywordマッピングをチェック（部分一致）
+            for (const [keyword, type] of typeMapping.entries()) {
+              if (bValue.includes(keyword)) {
+                excelRow[K_COL_INDEX] = type;
+                break; // 最初にマッチしたkeywordのtypeを使用
+              }
+            }
+          }
+          
           dataRowsNormalized.push(excelRow);
         }
         
