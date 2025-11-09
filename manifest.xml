@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" 
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" 
+           xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" 
+           xsi:type="TaskPaneApp">
+  
+  <Id>12345678-1234-1234-1234-123456789012</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Ross Dev</ProviderName>
+  <DefaultLocale>ja-JP</DefaultLocale>
+  <DisplayName DefaultValue="Excel Tools" />
+  <Description DefaultValue="Excel用の便利ツール集" />
+  <IconUrl DefaultValue="https://localhost:5173/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:5173/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://localhost:5173" />
+  
+  <AppDomains>
+    <AppDomain>https://localhost:5173</AppDomain>
+  </AppDomains>
+  
+  <Hosts>
+    <Host Name="Workbook" />
+  </Hosts>
+  
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:5173/index.html"/>
+  </DefaultSettings>
+  
+  <Permissions>ReadWriteDocument</Permissions>
+  
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <!-- リボンのホームタブに「ツールを開く」ボタンを追加 -->
+          <FunctionFile resid="Commands.Url" />
+          
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="ExcelToolsGroup">
+                <Label resid="GroupLabel" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                
+                <!-- ExcelTools メニュー（ドロップダウン） -->
+                <Control xsi:type="Menu" id="ExcelToolsMenu">
+                  <Label resid="ExcelToolsMenu.Label" />
+                  <Supertip>
+                    <Title resid="ExcelToolsMenu.Label" />
+                    <Description resid="ExcelToolsMenu.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Items>
+                    <!-- CSV取り込む サブメニュー項目 -->
+                    <Item id="ImportCsvMenuItem">
+                      <Label resid="ImportCsvMenuItem.Label" />
+                      <Supertip>
+                        <Title resid="ImportCsvMenuItem.Label" />
+                        <Description resid="ImportCsvMenuItem.Tooltip" />
+                      </Supertip>
+                      <Icon>
+                        <bt:Image size="16" resid="Icon.16x16"/>
+                        <bt:Image size="32" resid="Icon.32x32"/>
+                        <bt:Image size="80" resid="Icon.80x80"/>
+                      </Icon>
+                      <Action xsi:type="ShowTaskpane">
+                        <TaskpaneId>ImportCsvPane</TaskpaneId>
+                        <SourceLocation resid="TaskPane.Url.ImportCsv" />
+                      </Action>
+                    </Item>
+                  </Items>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:5173/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:5173/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:5173/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:5173" />
+        <bt:Url id="Commands.Url" DefaultValue="https://localhost:5173/commands.html" />
+        <bt:Url id="TaskPane.Url" DefaultValue="https://localhost:5173/index.html" />
+        <bt:Url id="TaskPane.Url.ImportCsv" DefaultValue="https://localhost:5173/index.html?action=importCsv" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="Excel Tools を開始" />
+        <bt:String id="GroupLabel" DefaultValue="Excel Tools" />
+        <bt:String id="ExcelToolsMenu.Label" DefaultValue="ExcelTools" />
+        <bt:String id="ImportCsvMenuItem.Label" DefaultValue="CSV取り込む" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="アドインが読み込まれました。" />
+        <bt:String id="ExcelToolsMenu.Tooltip" DefaultValue="Excel Tools メニュー" />
+        <bt:String id="ImportCsvMenuItem.Tooltip" DefaultValue="CSVファイルを選択してA1からインポートします" />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
+
