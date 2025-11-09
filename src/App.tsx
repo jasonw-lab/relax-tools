@@ -88,9 +88,9 @@ function App() {
             
             registerFeature({
               id: 'csv-import',
-              name: 'CSV取込(カード)',
+              name: 'CSV取込（カード）',
               category: 'csv',
-              description: 'CSVファイルの2行目以降をExcelの4行目からインポートします',
+              description: 'CSVファイルを選択し、ファイル名から月を抽出して該当シートにインポートします',
               execute: importCsvQuick,
             });
             

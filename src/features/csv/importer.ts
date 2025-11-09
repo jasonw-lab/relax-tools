@@ -1,208 +1,313 @@
 /**
- * CSV取込: 簡易CSVインポート
- * ファイル選択 → UTF-8/SJIS自動判定 → A1に書き込み → テーブル化
+ * CSV取込: 簡易CSVインポート（カード）
+ * 複数ファイル選択 → 各ファイルごとに月を抽出 → 該当シートに書き込み
  */
 
 /* global Excel */
 
 /**
- * 簡易CSVインポート機能
- * ファイル選択ダイアログでCSVを選択し、A1から書き込んでテーブル化
+ * ファイル名から月を抽出する
+ * ファイル名形式：`enaviYYMMDD(XXXX).csv` または `enaviYYYYMM(XXXX).csv`
+ * 例：
+ *   - `enavi202506(3034).csv` → "6"（6月）
+ *   - `enavi202507(3034).csv` → "7"（7月）
+ * @param fileName ファイル名
+ * @returns 月（文字列）、抽出できない場合は null
+ */
+function extractMonthFromFileName(fileName: string): string | null {
+  // ファイル名から拡張子を除去
+  const nameWithoutExt = fileName.replace(/\.csv$/i, '');
+  
+  // パターン: enavi + 6桁の数字 + (XXXX)
+  const pattern = /^enavi(\d{6})\(/;
+  const match = nameWithoutExt.match(pattern);
+  if (!match) {
+    return null;
+  }
+  
+  const digits = match[1];
+  
+  // 最初の2桁または4桁で形式を判定
+  // YYYYMM形式: 最初の4桁が年（例: 2025 → 202506）
+  // YYMMDD形式: 最初の2桁が年（例: 25 → 250615）
+  
+  // 最初の4桁が20以上なら YYYYMM 形式と判定
+  const first4Digits = parseInt(digits.substring(0, 4), 10);
+  if (first4Digits >= 2000) {
+    // YYYYMM 形式: 最後の2桁が月
+    const month = digits.substring(4);
+    const monthNum = parseInt(month, 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return monthNum.toString();
+    }
+  } else {
+    // YYMMDD 形式: 3-4桁目が月
+    const month = digits.substring(2, 4);
+    const monthNum = parseInt(month, 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return monthNum.toString();
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * CSVファイルを読み込んでテキストに変換
+ * @param file ファイルオブジェクト
+ * @returns テキストとエンコーディング
+ */
+async function readCsvFile(file: File): Promise<{ text: string; encoding: string }> {
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  
+  let text: string;
+  let encoding: string;
+  
+  // UTF-8 BOM判定 (EF BB BF)
+  if (uint8Array.length >= 3 && uint8Array[0] === 0xEF && uint8Array[1] === 0xBB && uint8Array[2] === 0xBF) {
+    text = new TextDecoder('utf-8').decode(uint8Array.slice(3));
+    encoding = 'UTF-8';
+  } else {
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(uint8Array);
+      encoding = 'UTF-8';
+    } catch (e) {
+      const Encoding = (await import('encoding-japanese')).default;
+      const result = Encoding.Convert(uint8Array, {
+        to: 'UNICODE',
+        from: 'SJIS',
+        type: 'string',
+      });
+      if (typeof result === 'string') {
+        text = result;
+      } else {
+        text = Encoding.codeToString(result);
+      }
+      encoding = 'SJIS';
+    }
+  }
+  
+  return { text, encoding };
+}
+
+/**
+ * CSV取込機能（カード）
+ * 複数のCSVファイルを選択し、各ファイル名から月を抽出して該当シートにインポート
  */
 export async function importCsvQuick(): Promise<void> {
   try {
-    console.log('CSVインポート開始');
+    console.log('CSVインポート開始（カード）');
     
-    // ファイル入力要素を作成（非表示だが、DOMに追加する必要がある）
+    // ファイル入力要素を作成（複数選択可能）
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.csv,text/csv';
-    fileInput.style.display = 'none'; // 非表示にする
+    fileInput.multiple = true; // 複数選択を有効化
+    fileInput.style.display = 'none';
     
-    // DOMに追加（Officeアドイン環境では必要）
     document.body.appendChild(fileInput);
     
     // ファイル選択を待つ
-    console.log('ファイル選択ダイアログを開きます');
-    const file = await new Promise<File>((resolve, reject) => {
-      // タイムアウトを設定（30秒）
+    const files = await new Promise<File[]>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        document.body.removeChild(fileInput); // クリーンアップ
+        document.body.removeChild(fileInput);
         reject(new Error('ファイル選択がタイムアウトしました'));
       }, 30000);
       
       const cleanup = () => {
         clearTimeout(timeout);
         if (document.body.contains(fileInput)) {
-          document.body.removeChild(fileInput); // クリーンアップ
+          document.body.removeChild(fileInput);
         }
       };
       
       fileInput.onchange = (e) => {
         cleanup();
         const target = e.target as HTMLInputElement;
-        const file = target.files?.[0];
-        if (file) {
-          console.log('ファイルが選択されました:', file.name);
-          resolve(file);
+        const files = target.files ? Array.from(target.files) : [];
+        if (files.length > 0) {
+          console.log(`${files.length}個のファイルが選択されました`);
+          resolve(files);
         } else {
           reject(new Error('ファイルが選択されませんでした'));
         }
       };
       
-      // キャンセル処理（ただし、ブラウザによっては発火しない場合がある）
       fileInput.addEventListener('cancel', () => {
         cleanup();
         reject(new Error('ファイル選択がキャンセルされました'));
       });
       
-      // 少し遅延を入れてからクリック（DOMに追加されたことを確実にする）
       setTimeout(() => {
         try {
           fileInput.click();
-          console.log('ファイル選択ダイアログを開きました');
         } catch (clickError) {
           cleanup();
-          console.error('ファイル選択ダイアログを開けませんでした:', clickError);
           reject(new Error('ファイル選択ダイアログを開けませんでした: ' + (clickError as Error).message));
         }
       }, 100);
     });
     
-    // ファイルを読み込み
-    console.log('ファイルを読み込み中...');
-    const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    console.log('ファイルサイズ:', uint8Array.length, 'bytes');
+    // 各シートごとの行ポインタ管理（シート名 -> 行番号）
+    const sheetRowPtr: Record<string, number> = {};
+    // 各シートのクリア済みフラグ（シート名 -> boolean）
+    const sheetCleared: Record<string, boolean> = {};
+    // 警告メッセージのリスト
+    const warnings: string[] = [];
     
-    // エンコーディング判定（簡易版: 先頭2バイトでBOM判定、なければSJISとして試行）
-    let text: string;
-    let encoding: string;
-    
-    // UTF-8 BOM判定 (EF BB BF)
-    if (uint8Array.length >= 3 && uint8Array[0] === 0xEF && uint8Array[1] === 0xBB && uint8Array[2] === 0xBF) {
-      console.log('UTF-8 BOMを検出');
-      text = new TextDecoder('utf-8').decode(uint8Array.slice(3));
-      encoding = 'UTF-8';
-    } else {
-      // encoding-japanese を使用してSJIS判定
-      // 簡易実装: まずUTF-8として試行、失敗したらSJIS
+    // 各CSVファイルを処理
+    for (const file of files) {
       try {
-        console.log('UTF-8としてデコードを試行');
-        text = new TextDecoder('utf-8', { fatal: true }).decode(uint8Array);
-        encoding = 'UTF-8';
-        console.log('UTF-8としてデコード成功');
-      } catch (e) {
-        console.log('UTF-8デコード失敗、SJISとして試行:', e);
-        // SJISとしてデコード
-        // encoding-japanese の Convert を使用
-        try {
-          const Encoding = (await import('encoding-japanese')).default;
-          console.log('encoding-japaneseをインポート完了');
-          
-          // Convert 関数を使用してSJISからUNICODEに変換
-          // type: 'string' オプションで直接文字列を取得できる
-          const result = Encoding.Convert(uint8Array, {
-            to: 'UNICODE',
-            from: 'SJIS',
-            type: 'string',
-          });
-          // type: 'string' がサポートされている場合は文字列、そうでなければコード配列
-          if (typeof result === 'string') {
-            text = result;
-            console.log('SJISとしてデコード成功（文字列）');
-          } else {
-            // コード配列の場合は codeToString で変換
-            text = Encoding.codeToString(result);
-            console.log('SJISとしてデコード成功（コード配列→文字列）');
+        // ファイル名から月を抽出
+        const month = extractMonthFromFileName(file.name);
+        if (!month) {
+          warnings.push(`ファイル「${file.name}」: 月を抽出できませんでした`);
+          continue;
+        }
+        
+        // 該当シートの存在チェック
+        let sheetExists = false;
+        await Excel.run(async (context) => {
+          try {
+            const sheet = context.workbook.worksheets.getItem(month);
+            sheet.load('name');
+            await context.sync();
+            sheetExists = true;
+          } catch (error) {
+            sheetExists = false;
           }
-          encoding = 'SJIS';
-        } catch (sjisError) {
-          console.error('SJISデコードも失敗:', sjisError);
-          throw new Error(`文字エンコーディングの判定に失敗しました: ${sjisError}`);
+        });
+        
+        if (!sheetExists) {
+          warnings.push(`ファイル「${file.name}」: 該当シート「${month}」が存在しません`);
+          continue;
         }
+        
+        // 各シートにつき最初の書き込み前に1回だけクリア
+        if (!sheetCleared[month]) {
+          await Excel.run(async (context) => {
+            const sheet = context.workbook.worksheets.getItem(month);
+            const clearRange = sheet.getRange('A4:L200');
+            // セル内容をクリア
+            clearRange.clear(Excel.ClearApplyTo.contents);
+            // 背景色もクリア（罫線は維持）
+            clearRange.format.fill.clear();
+            await context.sync();
+          });
+          sheetCleared[month] = true;
+          // クリア後は行ポインタを4に初期化
+          sheetRowPtr[month] = 4;
+        }
+        
+        // 現在の行ポインタを取得（初期化されていない場合は4）
+        let rowPtr = sheetRowPtr[month] || 4;
+        
+        // ファイルを読み込み
+        const { text } = await readCsvFile(file);
+        
+        // Papa.parse でCSVをパース（skipEmptyLines: "greedy"）
+        const Papa = (await import('papaparse')).default;
+        const parseResult = Papa.parse(text, {
+          header: false,
+          skipEmptyLines: 'greedy' as any,
+        }) as { data: string[][]; errors: any[]; meta: any };
+        
+        if (parseResult.errors.length > 0) {
+          console.warn('CSVパース警告:', parseResult.errors);
+        }
+        
+        const rows = parseResult.data as string[][];
+        
+        if (rows.length === 0) {
+          warnings.push(`ファイル「${file.name}」: CSVファイルが空です`);
+          continue;
+        }
+        
+        // ヘッダー行を除外してデータ行だけ扱う（2行目以降）
+        const dataRows = rows.length >= 2 ? rows.slice(1) : [];
+        
+        if (dataRows.length === 0) {
+          warnings.push(`ファイル「${file.name}」: データ行がありません`);
+          continue;
+        }
+        
+        // 列数はA〜L（12列）に制限
+        const MAX_COLS = 12;
+        const dataRowsNormalized: (string | number | boolean | null)[][] = [];
+        for (const row of dataRows) {
+          const excelRow: (string | number | boolean | null)[] = [];
+          for (let i = 0; i < MAX_COLS; i++) {
+            excelRow.push(i < row.length ? (row[i] || '') : '');
+          }
+          dataRowsNormalized.push(excelRow);
+        }
+        
+        // ファイル名を書き込む行
+        const fileNameRow: (string | number | boolean | null)[] = [file.name];
+        for (let i = 1; i < MAX_COLS; i++) {
+          fileNameRow.push('');
+        }
+        
+        // 書き込み上限チェック（L200 = 行200）
+        const MAX_ROW = 200;
+        const fileNameRowNum = rowPtr;
+        const dataStartRow = rowPtr + 1;
+        const dataEndRow = dataStartRow + dataRowsNormalized.length - 1;
+        
+        let actualDataRows = dataRowsNormalized;
+        let truncated = false;
+        
+        if (dataEndRow > MAX_ROW) {
+          // L200を超える分は切り捨て
+          const maxDataRows = MAX_ROW - dataStartRow + 1;
+          actualDataRows = dataRowsNormalized.slice(0, maxDataRows);
+          truncated = true;
+          warnings.push(`ファイル「${file.name}」: L200を超える分は切り捨てられました`);
+        }
+        
+        // Excelに書き込み（範囲一括）
+        await Excel.run(async (context) => {
+          const sheet = context.workbook.worksheets.getItem(month);
+          
+          // ファイル名行を書き込み
+          const fileNameRange = sheet.getRange(`A${fileNameRowNum}:L${fileNameRowNum}`);
+          fileNameRange.values = [fileNameRow];
+          // ファイル名行の背景色を薄い青色に設定
+          fileNameRange.format.fill.color = '#E6F3FF'; // 薄い青色
+          
+          // データ行を書き込み
+          if (actualDataRows.length > 0) {
+            const dataStartRowNum = fileNameRowNum + 1;
+            const dataEndRowNum = dataStartRowNum + actualDataRows.length - 1;
+            const dataRange = sheet.getRange(`A${dataStartRowNum}:L${dataEndRowNum}`);
+            dataRange.values = actualDataRows;
+          }
+          
+          await context.sync();
+        });
+        
+        // 行ポインタを更新（最後に書いたデータ行の行番号）
+        rowPtr = truncated ? MAX_ROW : (dataStartRow + actualDataRows.length - 1);
+        sheetRowPtr[month] = rowPtr;
+        
+        console.log(`ファイル「${file.name}」: シート「${month}」に書き込み完了（行${fileNameRowNum}〜${rowPtr}）`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        warnings.push(`ファイル「${file.name}」: ${errorMessage}`);
+        console.error(`ファイル「${file.name}」の処理でエラー:`, error);
       }
     }
     
-    console.log('デコード完了、文字数:', text.length);
-    
-    // Papa.parse でCSVをパース
-    console.log('CSVをパース中...');
-    const Papa = (await import('papaparse')).default;
-    const parseResult = Papa.parse(text, {
-      header: false,
-      skipEmptyLines: false,
-    }) as { data: string[][]; errors: any[]; meta: any };
-    
-    if (parseResult.errors.length > 0) {
-      console.warn('CSVパース警告:', parseResult.errors);
+    // 警告があれば表示
+    if (warnings.length > 0) {
+      const warningMessage = warnings.join('\n');
+      // Officeアドイン環境では alert() が使えないため、エラーとして throw
+      // App.tsx の handleFeatureClick でエラーメッセージとして表示される
+      throw new Error(`以下の警告がありました:\n${warningMessage}`);
     }
     
-    const rows = parseResult.data as string[][];
-    console.log('パース完了、行数:', rows.length);
-    
-    if (rows.length === 0) {
-      console.warn('CSVファイルが空です');
-      throw new Error('CSVファイルが空です');
-    }
-    
-    // CSVの2行目以降（ヘッダーを除く、インデックス1以降）を取得
-    if (rows.length < 2) {
-      console.warn('CSVファイルに2行目がありません');
-      throw new Error('CSVファイルに2行目がありません');
-    }
-    
-    // ヘッダーを除くデータ行を取得（2行目以降）
-    const dataRows = rows.slice(1); // インデックス1以降
-    console.log('CSVの2行目以降を取得、行数:', dataRows.length);
-    
-    if (dataRows.length === 0) {
-      console.warn('CSVファイルにデータ行がありません');
-      throw new Error('CSVファイルにデータ行がありません');
-    }
-    
-    // 列数の計算（最大列数を取得）
-    const colCount = Math.max(...dataRows.map((row: string[]) => row.length), 0);
-    console.log('列数:', colCount);
-    
-    if (colCount === 0) {
-      console.warn('CSVのデータ行が空です');
-      throw new Error('CSVのデータ行が空です');
-    }
-    
-    // Excelに書き込み
-    console.log('Excelに書き込み開始');
-    await Excel.run(async (context) => {
-      const sheet = context.workbook.worksheets.getActiveWorksheet();
-      
-      // Excelの4行目（row 4）からデータを書き込み
-      const startRow = 4;
-      const endRow = startRow + dataRows.length - 1;
-      
-      // 範囲のアドレス文字列を直接構築（range.addressを使わない）
-      const rangeAddress = `A${startRow}:${getColumnName(colCount - 1)}${endRow}`;
-      console.log('範囲アドレス:', rangeAddress);
-      
-      // 範囲を準備
-      const range = sheet.getRange(rangeAddress);
-      
-      // データを2次元配列に変換（空セルは null ではなく空文字列）
-      const values2D: (string | number | boolean | null)[][] = [];
-      for (const row of dataRows) {
-        const excelRow: (string | number | boolean | null)[] = [];
-        for (let i = 0; i < colCount; i++) {
-          excelRow.push(row[i] || '');
-        }
-        values2D.push(excelRow);
-      }
-      
-      console.log('データを設定、行数:', values2D.length, '列数:', colCount);
-      range.values = values2D;
-      
-      await context.sync();
-      console.log('Excelへの書き込み完了');
-      console.log(`CSVインポート完了 (${encoding}, Excelの${startRow}行目から${endRow}行目に${dataRows.length}行 x ${colCount}列のデータを書き込み)`);
-    });
+    console.log('すべてのCSVインポートが完了しました');
   } catch (error) {
     console.error('CSVインポートエラー:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -214,18 +319,4 @@ export async function importCsvQuick(): Promise<void> {
   }
 }
 
-/**
- * 列番号を列名に変換（0-based）
- * 例: 0 -> A, 25 -> Z, 26 -> AA
- */
-function getColumnName(colIndex: number): string {
-  let result = '';
-  colIndex++; // 1-based に変換
-  while (colIndex > 0) {
-    colIndex--;
-    result = String.fromCharCode(65 + (colIndex % 26)) + result;
-    colIndex = Math.floor(colIndex / 26);
-  }
-  return result;
-}
 
