@@ -3,7 +3,7 @@
  * Office.js の初期化とタスクペインUI
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import './App.css';
 import { 
   registerFeature, 
@@ -28,6 +28,7 @@ function App() {
     search: [],
     csv: [],
   });
+  const featuresRegisteredRef = useRef(false);
 
   useEffect(() => {
     // Office.js の初期化
@@ -59,38 +60,42 @@ function App() {
             }, 500);
           }
           
-          // 機能をレジストリに登録
-          registerFeature({
-            id: 'remove-blank-rows',
-            name: '空行削除',
-            category: 'sheet',
-            description: '選択範囲内の空行を削除します',
-            execute: removeBlankRowsInSelection,
-          });
-          
-          registerFeature({
-            id: 'to-hankaku',
-            name: '全角→半角',
-            category: 'text',
-            description: '選択範囲の全角文字を半角に変換します',
-            execute: toHankaku,
-          });
-          
-          registerFeature({
-            id: 'regex-replace',
-            name: '正規表現置換',
-            category: 'search',
-            description: 'アクティブシート全体に対して正規表現置換を実行します',
-            execute: regexReplaceAllWithPrompt,
-          });
-          
-          registerFeature({
-            id: 'csv-import',
-            name: 'CSV取込',
-            category: 'csv',
-            description: 'CSVファイルを選択してA1からインポートします',
-            execute: importCsvQuick,
-          });
+          // 機能をレジストリに登録（一度だけ実行）
+          if (!featuresRegisteredRef.current) {
+            registerFeature({
+              id: 'remove-blank-rows',
+              name: '空行削除',
+              category: 'sheet',
+              description: '選択範囲内の空行を削除します',
+              execute: removeBlankRowsInSelection,
+            });
+            
+            registerFeature({
+              id: 'to-hankaku',
+              name: '全角→半角',
+              category: 'text',
+              description: '選択範囲の全角文字を半角に変換します',
+              execute: toHankaku,
+            });
+            
+            registerFeature({
+              id: 'regex-replace',
+              name: '正規表現置換',
+              category: 'search',
+              description: 'アクティブシート全体に対して正規表現置換を実行します',
+              execute: regexReplaceAllWithPrompt,
+            });
+            
+            registerFeature({
+              id: 'csv-import',
+              name: 'CSV取込(カード)',
+              category: 'csv',
+              description: 'CSVファイルの2行目以降をExcelの4行目からインポートします',
+              execute: importCsvQuick,
+            });
+            
+            featuresRegisteredRef.current = true;
+          }
           
           // カテゴリ別に機能を取得
           setFeatures(getFeaturesByCategory());

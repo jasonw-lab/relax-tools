@@ -146,48 +146,62 @@ export async function importCsvQuick(): Promise<void> {
       throw new Error('CSVファイルが空です');
     }
     
-    // 列数の計算
-    const colCount = Math.max(...rows.map((row: string[]) => row.length), 0);
+    // CSVの2行目以降（ヘッダーを除く、インデックス1以降）を取得
+    if (rows.length < 2) {
+      console.warn('CSVファイルに2行目がありません');
+      throw new Error('CSVファイルに2行目がありません');
+    }
+    
+    // ヘッダーを除くデータ行を取得（2行目以降）
+    const dataRows = rows.slice(1); // インデックス1以降
+    console.log('CSVの2行目以降を取得、行数:', dataRows.length);
+    
+    if (dataRows.length === 0) {
+      console.warn('CSVファイルにデータ行がありません');
+      throw new Error('CSVファイルにデータ行がありません');
+    }
+    
+    // 列数の計算（最大列数を取得）
+    const colCount = Math.max(...dataRows.map((row: string[]) => row.length), 0);
     console.log('列数:', colCount);
+    
+    if (colCount === 0) {
+      console.warn('CSVのデータ行が空です');
+      throw new Error('CSVのデータ行が空です');
+    }
     
     // Excelに書き込み
     console.log('Excelに書き込み開始');
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
       
-      // A1からデータを書き込み
-      const rowCount = rows.length;
+      // Excelの4行目（row 4）からデータを書き込み
+      const startRow = 4;
+      const endRow = startRow + dataRows.length - 1;
       
       // 範囲のアドレス文字列を直接構築（range.addressを使わない）
-      const rangeAddress = `A1:${getColumnName(colCount - 1)}${rowCount}`;
+      const rangeAddress = `A${startRow}:${getColumnName(colCount - 1)}${endRow}`;
       console.log('範囲アドレス:', rangeAddress);
       
       // 範囲を準備
       const range = sheet.getRange(rangeAddress);
       
       // データを2次元配列に変換（空セルは null ではなく空文字列）
-      const values: (string | number | boolean | null)[][] = [];
-      for (const row of rows) {
+      const values2D: (string | number | boolean | null)[][] = [];
+      for (const row of dataRows) {
         const excelRow: (string | number | boolean | null)[] = [];
         for (let i = 0; i < colCount; i++) {
           excelRow.push(row[i] || '');
         }
-        values.push(excelRow);
+        values2D.push(excelRow);
       }
       
-      console.log('データを設定、行数:', values.length, '列数:', colCount);
-      range.values = values;
-      
-      // テーブル化（最初の行をヘッダーとして使用）
-      // range.address を使わず、直接アドレス文字列を使用
-      console.log('テーブルを作成中...');
-      const table = sheet.tables.add(rangeAddress, true); // hasHeaders = true
-      table.name = `Table_${Date.now()}`; // 一意な名前
-      table.style = 'TableStyleMedium2'; // デフォルトスタイル
+      console.log('データを設定、行数:', values2D.length, '列数:', colCount);
+      range.values = values2D;
       
       await context.sync();
       console.log('Excelへの書き込み完了');
-      console.log(`CSVインポート完了 (${encoding}, ${rowCount}行 x ${colCount}列)`);
+      console.log(`CSVインポート完了 (${encoding}, Excelの${startRow}行目から${endRow}行目に${dataRows.length}行 x ${colCount}列のデータを書き込み)`);
     });
   } catch (error) {
     console.error('CSVインポートエラー:', error);
