@@ -14,7 +14,9 @@ try {
     key: fs.readFileSync(path.join(certDir, 'localhost.key')),
   };
 } catch (error) {
-  console.warn('証明書ファイルが見つかりません。デフォルトのHTTPS設定を使用します。', error);
+  console.warn('証明書ファイルが見つかりません。デフォルトのHTTPS設定を使用します。');
+  console.warn('証明書を生成するには、以下のコマンドを実行してください:');
+  console.warn('  npm run cert:install');
   // 証明書が見つからない場合は、デフォルトのHTTPS設定を使用
   httpsOptions = undefined;
 }

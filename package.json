@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "cert:install": "office-addin-dev-certs install --machine",
+    "cert:uninstall": "office-addin-dev-certs uninstall --machine",
     "debug:desktop": "office-addin-debugging start manifest.xml desktop",
     "stop": "office-addin-debugging stop manifest.xml"
   },
