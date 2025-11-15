@@ -200,11 +200,139 @@
             }
         }
         
+        // 消費種類自動設定機能（リボンコマンド用）
+        async function setConsumptionCategory() {
+            try {
+                console.log('=== リボンから 消費種類自動設定開始 ===');
+                
+                // type.csvを読み込んでconsumptionMapを構築
+                var response = await fetch('/type.csv');
+                if (!response.ok) {
+                    throw new Error('type.csvの読み込みに失敗しました');
+                }
+                var text = await response.text();
+                
+                // 簡易CSVパース（ヘッダー行をスキップして、カンマで分割）
+                var lines = text.split(/\r?\n/);
+                var consumptionMap = new Map();
+                
+                // 1行目はヘッダーなのでスキップ（2行目から処理）
+                for (var i = 1; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) continue; // 空行をスキップ
+                    
+                    // カンマで分割（簡易実装、ダブルクォート処理は省略）
+                    var cells = line.split(',');
+                    if (cells.length >= 2) {
+                        var keyword = cells[0].trim();
+                        var type = cells[1].trim();
+                        if (keyword && type) {
+                            consumptionMap.set(keyword, type);
+                        }
+                    }
+                }
+                
+                console.log('consumptionMapを構築しました: ' + consumptionMap.size + '件のマッピング');
+                
+                if (consumptionMap.size === 0) {
+                    throw new Error('type.csvに有効なマッピングがありません');
+                }
+                
+                // Excel処理
+                await Excel.run(function(context) {
+                    var sheet = context.workbook.worksheets.getActiveWorksheet();
+                    
+                    // 使用範囲を取得して最終行を特定
+                    var usedRange = sheet.getUsedRange();
+                    usedRange.load(['rowCount', 'rowIndex']);
+                    
+                    return context.sync().then(function() {
+                        var startRow = 4; // 4行目から開始（1-based）
+                        var endRow = usedRange.rowIndex + usedRange.rowCount - 1; // 最終行（1-based）
+                        
+                        if (endRow < startRow) {
+                            console.log('処理対象の行がありません');
+                            return;
+                        }
+                        
+                        console.log('処理範囲: ' + startRow + '行目〜' + endRow + '行目');
+                        
+                        // B列とK列のデータを一括取得（4行目から最終行まで）
+                        var bColumnRange = sheet.getRange('B' + startRow + ':B' + endRow);
+                        var kColumnRange = sheet.getRange('K' + startRow + ':K' + endRow);
+                        
+                        bColumnRange.load('values');
+                        kColumnRange.load('values');
+                        
+                        return context.sync().then(function() {
+                            var bValues = bColumnRange.values;
+                            var kValues = kColumnRange.values;
+                            
+                            // 新しいK列の値を構築
+                            var newKValues = [];
+                            var matchedCount = 0;
+                            
+                            for (var i = 0; i < bValues.length; i++) {
+                                var bValue = String(bValues[i][0] || '').trim();
+                                var currentKValue = kValues[i][0];
+                                
+                                // B列が空の場合はスキップ（K列は変更しない）
+                                if (!bValue) {
+                                    newKValues.push([currentKValue]);
+                                    continue;
+                                }
+                                
+                                // consumptionMapの各キー（キーワード）がB列文字列に部分一致するかチェック
+                                var matchedType = null;
+                                for (var entry of consumptionMap.entries()) {
+                                    var keyword = entry[0];
+                                    var type = entry[1];
+                                    if (bValue.includes(keyword)) {
+                                        matchedType = type;
+                                        matchedCount++;
+                                        break; // 最初にマッチしたキーを使用
+                                    }
+                                }
+                                
+                                // マッチした場合は新しい値を設定、マッチしない場合は既存の値を維持
+                                if (matchedType !== null) {
+                                    newKValues.push([matchedType]);
+                                } else {
+                                    newKValues.push([currentKValue]);
+                                }
+                            }
+                            
+                            // K列に一括書き込み
+                            if (matchedCount > 0) {
+                                kColumnRange.values = newKValues;
+                                return context.sync().then(function() {
+                                    console.log('消費種類自動設定完了: ' + matchedCount + '件のマッチ');
+                                });
+                            } else {
+                                console.log('マッチするキーワードが見つかりませんでした');
+                            }
+                        });
+                    });
+                });
+                
+                console.log('=== 消費種類自動設定完了 ===');
+            } catch (error) {
+                console.error('=== 消費種類自動設定エラー ===');
+                console.error('エラー:', error);
+                var errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('エラーメッセージ:', errorMessage);
+                // エラーを再スロー
+                throw error;
+            }
+        }
+        
         // グローバル関数としてエクスポート（manifest.xml の FunctionName と一致）
         // ExecuteFunction アクションで呼び出される
         if (typeof window !== 'undefined') {
             window.importCsv = importCsv;
+            window.setConsumptionCategory = setConsumptionCategory;
             console.log('importCsv 関数を登録しました');
+            console.log('setConsumptionCategory 関数を登録しました');
         }
         
         // Office.js の初期化
@@ -212,13 +340,16 @@
             if (info.host === Office.HostType.Excel) {
                 console.log('Commands.html: Office.js 初期化完了');
                 console.log('importCsv 関数:', typeof window.importCsv);
+                console.log('setConsumptionCategory 関数:', typeof window.setConsumptionCategory);
                 
                 // Shared Runtime の場合、actions.associate で登録
                 if (Office.context.requirements.isSetSupported('SharedRuntime')) {
                     console.log('Shared Runtime がサポートされています');
                     if (Office.actions && Office.actions.associate) {
                         Office.actions.associate('importCsv', importCsv);
+                        Office.actions.associate('setConsumptionCategory', setConsumptionCategory);
                         console.log('importCsv を actions.associate で登録しました');
+                        console.log('setConsumptionCategory を actions.associate で登録しました');
                     }
                 }
             }

@@ -79,6 +79,33 @@
                   </Items>
                 </Control>
               </Group>
+              
+              <!-- 家計管理グループ -->
+              <Group id="HouseholdManagementGroup">
+                <Label resid="HouseholdManagementGroup.Label" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                
+                <!-- 消費カテゴリ自動設定ボタン -->
+                <Control xsi:type="Button" id="SetConsumptionCategoryButton">
+                  <Label resid="SetConsumptionCategoryButton.Label" />
+                  <Supertip>
+                    <Title resid="SetConsumptionCategoryButton.Label" />
+                    <Description resid="SetConsumptionCategoryButton.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>setConsumptionCategory</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
             </OfficeTab>
           </ExtensionPoint>
         </DesktopFormFactor>
@@ -102,11 +129,14 @@
         <bt:String id="GroupLabel" DefaultValue="Excel Tools" />
         <bt:String id="ExcelToolsMenu.Label" DefaultValue="ExcelTools" />
         <bt:String id="ImportCsvMenuItem.Label" DefaultValue="CSV取り込む" />
+        <bt:String id="HouseholdManagementGroup.Label" DefaultValue="家計管理" />
+        <bt:String id="SetConsumptionCategoryButton.Label" DefaultValue="消費カテゴリ自動設定" />
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="アドインが読み込まれました。" />
         <bt:String id="ExcelToolsMenu.Tooltip" DefaultValue="Excel Tools メニュー" />
         <bt:String id="ImportCsvMenuItem.Tooltip" DefaultValue="CSVファイルを選択してA1からインポートします" />
+        <bt:String id="SetConsumptionCategoryButton.Tooltip" DefaultValue="アクティブシートの4行目から最終行まで、B列（利用店名/商品名）をチェックしてK列（消費種類）に自動設定します" />
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

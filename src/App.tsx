@@ -12,6 +12,7 @@ import {
   type FeatureCategory 
 } from './features/feature-registry';
 import { removeBlankRowsInSelection } from './features/sheet/blank-ops';
+import { setConsumptionCategory } from './features/sheet/category-auto-set'
 import { toHankaku } from './features/text/convert';
 import { regexReplaceAllWithPrompt } from './features/search/regex';
 import { importCsvQuick } from './features/csv/importer';
@@ -93,6 +94,15 @@ function App() {
               description: 'CSVファイルを選択し、ファイル名から月を抽出して該当シートにインポートします',
               execute: importCsvQuick,
             });
+            
+            registerFeature({
+                id: 'set-consumption-category',
+                name: '消費カテゴリ',
+                category: 'csv',
+                description:
+                    'アクティブシートの4行目から最終行まで、B列（利用店名/商品名）をチェックしてK列（消費種類）に自動設定します',
+                execute: setConsumptionCategory,
+            })
             
             featuresRegisteredRef.current = true;
           }
